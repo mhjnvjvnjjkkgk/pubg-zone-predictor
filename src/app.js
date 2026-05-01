@@ -35,7 +35,7 @@ const footerNote    = document.getElementById('footerNote');
 let mapImg       = null;
 let drawnZones   = [];    // [{phase,cx,cy,r}]
 let activePhase  = 1;
-let drawState    = null;  // {startX,startY} while dragging
+let drawState    = null;  // { mode, startX, startY, zone, origCx, origCy, origR }
 let currentDraw  = null;  // zone being drawn (live preview)
 let simResults   = null;
 let predictions  = null;
@@ -124,9 +124,21 @@ function drawZoneRing(z, isPreview = false) {
   ovCtx.beginPath(); ovCtx.arc(p.x, p.y, cr, 0, Math.PI*2); ovCtx.stroke();
   ovCtx.setLineDash([]); ovCtx.shadowBlur = 0; ovCtx.globalAlpha = 1;
 
-  // Center dot
-  ovCtx.fillStyle = color;
-  ovCtx.beginPath(); ovCtx.arc(p.x, p.y, isPreview ? 3 : 5, 0, Math.PI*2); ovCtx.fill();
+  // Edit handles (center and edge)
+  if (!isPreview && simResults === null) {
+    // Show handles only when we can edit (not while predictions are shown)
+    ovCtx.fillStyle = 'rgba(255,255,255,0.8)';
+    ovCtx.beginPath(); ovCtx.arc(p.x, p.y, 5, 0, Math.PI*2); ovCtx.fill();
+    ovCtx.strokeStyle = '#000'; ovCtx.lineWidth = 1; ovCtx.stroke();
+    
+    // Edge handle
+    ovCtx.fillStyle = color;
+    ovCtx.beginPath(); ovCtx.arc(p.x + cr, p.y, 4, 0, Math.PI*2); ovCtx.fill();
+  } else {
+    // Center dot
+    ovCtx.fillStyle = color;
+    ovCtx.beginPath(); ovCtx.arc(p.x, p.y, isPreview ? 3 : 5, 0, Math.PI*2); ovCtx.fill();
+  }
 
   // Label
   if (!isPreview) {
@@ -221,7 +233,7 @@ function renderPhaseWindow(canvasId, phasePoints, color, label, confEl) {
   }
 }
 
-// ── Drawing events ────────────────────────────────────────────────────────────
+// ── Drawing & Editing events ──────────────────────────────────────────────────
 function getPos(e) {
   const rect = overlayCanvas.getBoundingClientRect();
   const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -230,30 +242,116 @@ function getPos(e) {
 }
 
 function isPhaseDrawn(ph) { return drawnZones.some(z => z.phase === ph); }
+function getZoneAtPos(pos) {
+  const worldPos = c2w(pos.x, pos.y);
+  // Iterate backwards so top-most zones are picked first
+  for (let i = drawnZones.length - 1; i >= 0; i--) {
+    const z = drawnZones[i];
+    const dx = z.cx - worldPos.x;
+    const dy = z.cy - worldPos.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    
+    // Check if clicked near center (move)
+    const centerHitRadius = (15 / overlayCanvas.width) * MAP_SIZE; // 15px in world coords
+    if (dist <= centerHitRadius) return { zone: z, action: 'move' };
+    
+    // Check if clicked near edge (resize)
+    const edgeHitMargin = (15 / overlayCanvas.width) * MAP_SIZE; // 15px in world coords
+    if (Math.abs(dist - z.r) <= edgeHitMargin) return { zone: z, action: 'resize' };
+  }
+  return null;
+}
 
 overlayCanvas.addEventListener('mousedown', e => {
-  if (isPhaseDrawn(activePhase)) return; // already drawn
   const pos = getPos(e);
-  drawState = { startX: pos.x, startY: pos.y };
-  mapHint.style.display = 'none';
+  
+  // Check if we are clicking on an existing zone to edit it
+  const hit = getZoneAtPos(pos);
+  if (hit) {
+    drawState = { 
+      mode: hit.action, 
+      zone: hit.zone,
+      startX: pos.x, 
+      startY: pos.y,
+      origCx: hit.zone.cx,
+      origCy: hit.zone.cy,
+      origR: hit.zone.r
+    };
+    mapHint.style.display = 'none';
+    return;
+  }
+  
+  // Otherwise, if active phase is not drawn, create new
+  if (!isPhaseDrawn(activePhase)) {
+    drawState = { mode: 'create', startX: pos.x, startY: pos.y };
+    mapHint.style.display = 'none';
+  }
 });
 
 overlayCanvas.addEventListener('mousemove', e => {
-  if (!drawState) return;
   const pos = getPos(e);
-  const dx = pos.x - drawState.startX;
-  const dy = pos.y - drawState.startY;
-  const cr = Math.sqrt(dx*dx + dy*dy);
-  const world = c2w(drawState.startX, drawState.startY);
-  const wr = Math.max((cr / overlayCanvas.width) * MAP_SIZE, 50);
-  currentDraw = { phase: activePhase, cx: world.x, cy: world.y, r: wr };
-  renderOverlay();
+  
+  // Change cursor based on hover
+  if (!drawState) {
+    const hit = getZoneAtPos(pos);
+    if (hit) {
+      overlayCanvas.style.cursor = hit.action === 'move' ? 'move' : 'nwse-resize';
+    } else {
+      overlayCanvas.style.cursor = 'crosshair';
+    }
+  }
+
+  if (!drawState) return;
+  
+  const world = c2w(pos.x, pos.y);
+
+  if (drawState.mode === 'create') {
+    const dx = pos.x - drawState.startX;
+    const dy = pos.y - drawState.startY;
+    const cr = Math.sqrt(dx*dx + dy*dy);
+    const startWorld = c2w(drawState.startX, drawState.startY);
+    const wr = Math.max((cr / overlayCanvas.width) * MAP_SIZE, 50);
+    currentDraw = { phase: activePhase, cx: startWorld.x, cy: startWorld.y, r: wr };
+    renderOverlay();
+  } 
+  else if (drawState.mode === 'move') {
+    const dx = world.x - c2w(drawState.startX, drawState.startY).x;
+    const dy = world.y - c2w(drawState.startX, drawState.startY).y;
+    drawState.zone.cx = drawState.origCx + dx;
+    drawState.zone.cy = drawState.origCy + dy;
+    
+    // Clear results when editing
+    simResults = null; predictions = null;
+    bestZonePanel.style.display = 'none';
+    phaseWindows.style.display = 'none';
+    uncertaintyOverlay.style.display = 'none';
+    
+    updateUI();
+    renderOverlay();
+  }
+  else if (drawState.mode === 'resize') {
+    const dx = world.x - drawState.zone.cx;
+    const dy = world.y - drawState.zone.cy;
+    const newR = Math.sqrt(dx*dx + dy*dy);
+    drawState.zone.r = Math.max(newR, 50);
+    
+    simResults = null; predictions = null;
+    bestZonePanel.style.display = 'none';
+    phaseWindows.style.display = 'none';
+    uncertaintyOverlay.style.display = 'none';
+    
+    updateUI();
+    renderOverlay();
+  }
 });
 
 overlayCanvas.addEventListener('mouseup', () => {
-  if (!drawState || !currentDraw) return;
-  const z = { ...currentDraw };
-  drawnZones.push(z);
+  if (!drawState) return;
+  
+  if (drawState.mode === 'create' && currentDraw) {
+    drawnZones.push({ ...currentDraw });
+  }
+  
   currentDraw = null;
   drawState = null;
   updateUI();
@@ -261,8 +359,10 @@ overlayCanvas.addEventListener('mouseup', () => {
 });
 
 overlayCanvas.addEventListener('mouseleave', () => {
-  if (drawState && currentDraw) {
-    drawnZones.push({ ...currentDraw });
+  if (drawState) {
+    if (drawState.mode === 'create' && currentDraw) {
+      drawnZones.push({ ...currentDraw });
+    }
     currentDraw = null;
     drawState = null;
     updateUI();
