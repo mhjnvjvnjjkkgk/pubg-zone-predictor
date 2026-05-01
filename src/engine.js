@@ -32,7 +32,10 @@ export class ZoneEngine {
     const samplePaths = [];
 
     for (let i = 0; i < iterations; i++) {
-      const path = this._runPath(startZone.cx, startZone.cy, startZone.r, startPhase, centerBias, landMask);
+      // Assign a random direction tendency to this match to simulate hard shifts
+      const matchShiftAngle = Math.random() * Math.PI * 2;
+      
+      const path = this._runPath(startZone.cx, startZone.cy, startZone.r, startPhase, centerBias, landMask, matchShiftAngle);
 
       path.forEach((z, idx) => {
         const phase = startPhase + 1 + idx;
@@ -62,7 +65,7 @@ export class ZoneEngine {
     return landMask[gy * res + gx] === 1;
   }
 
-  _runPath(cx, cy, r, fromPhase, centerBias, landMask) {
+  _runPath(cx, cy, r, fromPhase, centerBias, landMask, matchShiftAngle) {
     const path = [];
 
     for (let phase = fromPhase + 1; phase <= 8; phase++) {
@@ -72,9 +75,7 @@ export class ZoneEngine {
       let bestNext = null;
       let bestScore = -Infinity;
       
-      // Sample multiple points and pick the best one based on BGMI rules
-      // (Water avoidance and distance penalty)
-      const attempts = phase >= 6 ? 15 : 5; // More attempts late game to find land
+      const attempts = phase >= 6 ? 20 : 8; // More attempts late game
 
       for (let attempt = 0; attempt < attempts; attempt++) {
         const angle = Math.random() * Math.PI * 2;
@@ -84,7 +85,6 @@ export class ZoneEngine {
 
         let next = { cx: cx + dist * Math.cos(angle), cy: cy + dist * Math.sin(angle), r: nr };
         
-        // Force bounds
         if (!this._inBounds(next)) {
           next.cx = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cx));
           next.cy = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cy));
@@ -92,22 +92,22 @@ export class ZoneEngine {
 
         let score = 0;
         
-        // BGMI Water Avoidance Rule
         const isLand = this._isLand(next.cx, next.cy, landMask);
         
         if (phase >= 4) {
-          // Mid-game: penalize water heavily
-          if (!isLand) score -= 100;
+          if (!isLand) score -= 500;
         }
         
         if (phase >= 7) {
-          // Late-game: strictly forbid water
           if (!isLand) score -= 10000;
         }
 
-        // Penalty for extreme hard shifts (to maintain some center bias)
-        // unless we are forced to shift to find land
-        score -= (dist / maxOff) * 5;
+        // Reward the zone for shifting in the pre-determined match direction
+        const angleDiff = Math.abs(Math.atan2(Math.sin(angle - matchShiftAngle), Math.cos(angle - matchShiftAngle)));
+        score += (dist / maxOff) * 15 * (1 - (angleDiff / Math.PI));
+        
+        // Small baseline penalty for extreme edges to keep it realistic
+        score -= (dist / maxOff) * 4;
 
         if (score > bestScore) {
           bestScore = score;
