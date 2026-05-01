@@ -19,7 +19,7 @@ export class ZoneEngine {
    * @param {boolean} centerBias - use center-biased sampling (more realistic)
    * @returns {{ finals, allPhasePoints, samplePaths }}
    */
-  simulate(knownZones, iterations = 10000, centerBias = true) {
+  simulate(knownZones, iterations = 10000, centerBias = true, landMask = null) {
     const startPhase = knownZones[knownZones.length - 1].phase;
     const startZone  = knownZones[knownZones.length - 1];
 
@@ -32,7 +32,7 @@ export class ZoneEngine {
     const samplePaths = [];
 
     for (let i = 0; i < iterations; i++) {
-      const path = this._runPath(startZone.cx, startZone.cy, startZone.r, startPhase, centerBias);
+      const path = this._runPath(startZone.cx, startZone.cy, startZone.r, startPhase, centerBias, landMask);
 
       path.forEach((z, idx) => {
         const phase = startPhase + 1 + idx;
@@ -53,31 +53,70 @@ export class ZoneEngine {
     };
   }
 
-  _runPath(cx, cy, r, fromPhase, centerBias) {
+  _isLand(cx, cy, landMask) {
+    if (!landMask) return true; // Default to true if no mask
+    const res = 256;
+    const gx = Math.floor((cx / ZoneEngine.MAP_SIZE) * res);
+    const gy = Math.floor((cy / ZoneEngine.MAP_SIZE) * res);
+    if (gx < 0 || gx >= res || gy < 0 || gy >= res) return false;
+    return landMask[gy * res + gx] === 1;
+  }
+
+  _runPath(cx, cy, r, fromPhase, centerBias, landMask) {
     const path = [];
 
     for (let phase = fromPhase + 1; phase <= 8; phase++) {
       const nr      = r * ZoneEngine.SHRINK[phase];
       const maxOff  = r - nr;
 
-      let next, tries = 0;
-      do {
+      let bestNext = null;
+      let bestScore = -Infinity;
+      
+      // Sample multiple points and pick the best one based on BGMI rules
+      // (Water avoidance and distance penalty)
+      const attempts = phase >= 6 ? 15 : 5; // More attempts late game to find land
+
+      for (let attempt = 0; attempt < attempts; attempt++) {
         const angle = Math.random() * Math.PI * 2;
         const dist  = centerBias
           ? this._centerBiasSample(maxOff)
           : Math.sqrt(Math.random()) * maxOff;
 
-        next = { cx: cx + dist * Math.cos(angle), cy: cy + dist * Math.sin(angle), r: nr };
-        tries++;
-      } while (!this._inBounds(next) && tries < 40);
+        let next = { cx: cx + dist * Math.cos(angle), cy: cy + dist * Math.sin(angle), r: nr };
+        
+        // Force bounds
+        if (!this._inBounds(next)) {
+          next.cx = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cx));
+          next.cy = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cy));
+        }
 
-      if (!this._inBounds(next)) {
-        next.cx = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cx));
-        next.cy = Math.max(nr, Math.min(ZoneEngine.MAP_SIZE - nr, next.cy));
+        let score = 0;
+        
+        // BGMI Water Avoidance Rule
+        const isLand = this._isLand(next.cx, next.cy, landMask);
+        
+        if (phase >= 4) {
+          // Mid-game: penalize water heavily
+          if (!isLand) score -= 100;
+        }
+        
+        if (phase >= 7) {
+          // Late-game: strictly forbid water
+          if (!isLand) score -= 10000;
+        }
+
+        // Penalty for extreme hard shifts (to maintain some center bias)
+        // unless we are forced to shift to find land
+        score -= (dist / maxOff) * 5;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestNext = next;
+        }
       }
 
-      cx = next.cx; cy = next.cy; r = next.r;
-      path.push(next);
+      cx = bestNext.cx; cy = bestNext.cy; r = bestNext.r;
+      path.push(bestNext);
     }
 
     return path;

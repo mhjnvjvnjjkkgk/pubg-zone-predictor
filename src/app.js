@@ -39,15 +39,49 @@ let drawState    = null;  // { mode, startX, startY, zone, origCx, origCy, origR
 let currentDraw  = null;  // zone being drawn (live preview)
 let simResults   = null;
 let predictions  = null;
+let landMask     = null;
 let iterations   = 10000;
 let showHeatmap  = true, showPaths = true, showZones = true, centerBias = true;
 
 // ── Map loading ───────────────────────────────────────────────────────────────
 function loadMap() {
   const img = new Image();
-  img.onload  = () => { mapImg = img; resize(); renderMap(); };
+  img.onload  = () => { 
+    mapImg = img; 
+    generateLandMask(img);
+    resize(); 
+    renderMap(); 
+  };
   img.onerror = () => { mapImg = null; resize(); renderMap(); };
   img.src = './assets/erangel.png';
+}
+
+function generateLandMask(img) {
+  const res = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = res; canvas.height = res;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, res, res);
+  const data = ctx.getImageData(0, 0, res, res).data;
+  
+  landMask = new Uint8Array(res * res);
+  let landCount = 0;
+  for (let i = 0; i < res * res; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    
+    // Erangel water is dark blue. Land is green/brown/grey.
+    const isWater = (b > r + 15) && (b > g + 5) && (r < 120);
+    
+    if (!isWater) {
+      landMask[i] = 1;
+      landCount++;
+    } else {
+      landMask[i] = 0;
+    }
+  }
+  console.log(`Landmask generated. Land %: ${Math.round(landCount / (res*res) * 100)}`);
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
@@ -475,7 +509,7 @@ function runSim() {
 
     // Sort and use all drawn zones as constraints
     const sorted = [...drawnZones].sort((a,b) => a.phase - b.phase);
-    simResults = engine.simulate(sorted, iterations, centerBias);
+    simResults = engine.simulate(sorted, iterations, centerBias, landMask);
 
     // Build heatmap from final zone (phase 8)
     if (simResults.finals) heatmap.build(simResults.finals, MAP_SIZE);
