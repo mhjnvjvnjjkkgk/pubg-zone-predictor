@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PUBG Zone Predictor — Erangel</title>
+  <meta name="description" content="Draw Zone 1 on Erangel and predict final zone locations using Monte Carlo simulation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <polygon points="14,2 26,9 26,19 14,26 2,19 2,9" stroke="#f0c040" stroke-width="2" fill="none"/>
+          <polygon points="14,7 21,11 21,17 14,21 7,17 7,11" fill="#f0c040" opacity="0.3"/>
+        </svg>
+        <span>ZONE<strong>PREDICT</strong></span>
+      </div>
+      <div class="header-tags">
+        <span class="tag">ERANGEL</span>
+        <span class="tag">PUBG MOBILE</span>
+        <span class="tag tag-live" id="statusTag">READY</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="map-wrap" id="mapWrap">
+        <canvas id="mapCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+
+        <div class="hint" id="hint">
+          <div class="hint-inner">
+            <div class="hint-icon">🎯</div>
+            <p><strong>Click</strong> to place zone center</p>
+            <p><strong>Drag</strong> to set radius</p>
+          </div>
+        </div>
+
+        <div class="corner-label">Zone 1 · Draw Mode</div>
+      </div>
+
+      <aside class="sidebar">
+        <!-- Zone Info -->
+        <div class="panel">
+          <div class="panel-title">
+            <span class="dot dot-white"></span>Zone 1 Info
+          </div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-val" id="statRadius">—</div>
+              <div class="stat-lbl">Radius (m)</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="statArea">—</div>
+              <div class="stat-lbl">Area (km²)</div>
+            </div>
+            <div class="stat-box" style="grid-column:span 2">
+              <div class="stat-val" id="statCenter">— , —</div>
+              <div class="stat-lbl">Center (x, y)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="panel">
+          <div class="panel-title">
+            <span class="dot dot-yellow"></span>Simulation
+          </div>
+          <div class="control-row">
+            <span class="ctrl-label">Iterations</span>
+            <div class="iter-btns">
+              <button class="iter-btn" data-val="1000">1K</button>
+              <button class="iter-btn active" data-val="10000">10K</button>
+              <button class="iter-btn" data-val="50000">50K</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <span class="ctrl-label">Layers</span>
+            <div class="toggles">
+              <label class="tog"><input type="checkbox" id="togHeatmap" checked><span class="tog-track"></span><span>Heatmap</span></label>
+              <label class="tog"><input type="checkbox" id="togPaths" checked><span class="tog-track"></span><span>Paths</span></label>
+              <label class="tog"><input type="checkbox" id="togZones" checked><span class="tog-track"></span><span>Predictions</span></label>
+            </div>
+          </div>
+
+          <button class="btn-primary" id="predictBtn" disabled>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14"/></svg>
+            Predict Zones
+          </button>
+          <button class="btn-secondary" id="resetBtn">↺ Reset</button>
+        </div>
+
+        <!-- Results -->
+        <div class="panel" id="resultsPanel" style="display:none">
+          <div class="panel-title">
+            <span class="dot dot-green"></span>Predicted Final Zones
+          </div>
+          <div id="resultsList"></div>
+          <div class="heatmap-legend">
+            <span>Low</span>
+            <div class="legend-bar"></div>
+            <span>High</span>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading-panel" id="loadingPanel" style="display:none">
+          <div class="spinner"></div>
+          <span id="loadingText">Simulating zones…</span>
+        </div>
+
+        <div class="footer-note">
+          Monte Carlo zone physics · <span id="iterCount">10,000</span> simulations
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
