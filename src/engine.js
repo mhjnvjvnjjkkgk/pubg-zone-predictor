@@ -23,6 +23,24 @@ export class ZoneEngine {
     const startPhase = knownZones[knownZones.length - 1].phase;
     const startZone  = knownZones[knownZones.length - 1];
 
+    // CALCULATE MOMENTUM FROM ALL DRAWN ZONES
+    let hasMomentum = false;
+    let momentumAngle = 0;
+    
+    if (knownZones.length > 1) {
+      // Vector from first drawn zone to last drawn zone
+      const firstZ = knownZones[0];
+      const lastZ = knownZones[knownZones.length - 1];
+      const dx = lastZ.cx - firstZ.cx;
+      const dy = lastZ.cy - firstZ.cy;
+      
+      // Only use momentum if there was a noticeable shift
+      if (Math.hypot(dx, dy) > 100) {
+        hasMomentum = true;
+        momentumAngle = Math.atan2(dy, dx);
+      }
+    }
+
     // Storage: for each phase 2-8, record all simulated centers
     const phasePoints = {};
     for (let p = startPhase + 1; p <= 8; p++) {
@@ -32,8 +50,21 @@ export class ZoneEngine {
     const samplePaths = [];
 
     for (let i = 0; i < iterations; i++) {
-      // Assign a random direction tendency to this match to simulate hard shifts
-      const matchShiftAngle = Math.random() * Math.PI * 2;
+      // Assign a direction tendency to this match to simulate hard shifts
+      // If the user has drawn multiple zones, heavily bias the simulation to follow the shift momentum!
+      let matchShiftAngle;
+      if (hasMomentum) {
+        // Bias the random angle towards the momentum angle (e.g. within ±45 degrees)
+        // 80% chance to follow momentum, 20% chance to scatter
+        if (Math.random() < 0.8) {
+          const variance = (Math.random() - 0.5) * (Math.PI / 2); // ±45 degrees
+          matchShiftAngle = momentumAngle + variance;
+        } else {
+          matchShiftAngle = Math.random() * Math.PI * 2;
+        }
+      } else {
+        matchShiftAngle = Math.random() * Math.PI * 2;
+      }
       
       const path = this._runPath(startZone.cx, startZone.cy, startZone.r, startPhase, centerBias, landMask, matchShiftAngle);
 
