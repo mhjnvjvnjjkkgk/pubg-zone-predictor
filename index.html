@@ -3,122 +3,166 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PUBG Zone Predictor — Erangel</title>
-  <meta name="description" content="Draw Zone 1 on Erangel and predict final zone locations using Monte Carlo simulation.">
+  <title>ZonePredict — PUBG Erangel Zone Predictor</title>
+  <meta name="description" content="Draw zones on Erangel and predict the most accurate final safe zone using Monte Carlo simulation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <polygon points="14,2 26,9 26,19 14,26 2,19 2,9" stroke="#f0c040" stroke-width="2" fill="none"/>
-          <polygon points="14,7 21,11 21,17 14,21 7,17 7,11" fill="#f0c040" opacity="0.3"/>
-        </svg>
-        <span>ZONE<strong>PREDICT</strong></span>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 26 26"><polygon points="13,1 25,8 25,18 13,25 1,18 1,8" stroke="#f0c040" stroke-width="2" fill="rgba(240,192,64,0.1)"/><circle cx="13" cy="13" r="3" fill="#f0c040"/></svg>
+      <span>ZONE<strong>PREDICT</strong></span>
+      <span class="version-badge">v2.0</span>
+    </div>
+    <div class="header-center">
+      <!-- Zone phase selector -->
+      <div class="phase-selector" id="phaseSelector">
+        <span class="phase-label">Drawing:</span>
+        <button class="phase-btn active" data-phase="1" id="phaseBtn1">Zone 1</button>
+        <button class="phase-btn" data-phase="2" id="phaseBtn2">Zone 2</button>
+        <button class="phase-btn" data-phase="3" id="phaseBtn3">Zone 3</button>
+        <button class="phase-btn" data-phase="4" id="phaseBtn4">Zone 4</button>
       </div>
-      <div class="header-tags">
-        <span class="tag">ERANGEL</span>
-        <span class="tag">PUBG MOBILE</span>
-        <span class="tag tag-live" id="statusTag">READY</span>
+    </div>
+    <div class="header-right">
+      <span class="tag">ERANGEL</span>
+      <span class="tag tag-status" id="statusTag">READY</span>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- MAP -->
+    <div class="map-wrap" id="mapWrap">
+      <canvas id="mapCanvas"></canvas>
+      <canvas id="overlayCanvas"></canvas>
+
+      <div class="map-hint" id="mapHint">
+        <div class="hint-card">
+          <div class="hint-icon">🎯</div>
+          <p><strong>Click</strong> to set center · <strong>Drag</strong> to set radius</p>
+          <p class="hint-sub">Start with Zone 1, add more zones for higher accuracy</p>
+        </div>
       </div>
-    </header>
 
-    <main class="main">
-      <div class="map-wrap" id="mapWrap">
-        <canvas id="mapCanvas"></canvas>
-        <canvas id="overlayCanvas"></canvas>
+      <div class="map-badge">ZONE 1 · DRAW MODE</div>
 
-        <div class="hint" id="hint">
-          <div class="hint-inner">
-            <div class="hint-icon">🎯</div>
-            <p><strong>Click</strong> to place zone center</p>
-            <p><strong>Drag</strong> to set radius</p>
-          </div>
+      <!-- Uncertainty meter overlay -->
+      <div class="uncertainty-overlay" id="uncertaintyOverlay" style="display:none">
+        <div class="unc-label">Prediction Accuracy</div>
+        <div class="unc-bar-wrap"><div class="unc-bar" id="uncBar"></div></div>
+        <div class="unc-pct" id="uncPct">0%</div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- BEST ZONE (primary result) -->
+      <div class="best-zone-panel" id="bestZonePanel" style="display:none">
+        <div class="bz-header">
+          <span class="bz-crown">👑</span>
+          <span>MOST LIKELY FINAL ZONE</span>
         </div>
-
-        <div class="corner-label">Zone 1 · Draw Mode</div>
+        <div class="bz-confidence" id="bzConfidence">—%</div>
+        <div class="bz-coords" id="bzCoords">— , —</div>
+        <div class="bz-ring" id="bzRing"></div>
+        <div class="bz-sub" id="bzSub">Run simulation to predict</div>
       </div>
 
-      <aside class="sidebar">
-        <!-- Zone Info -->
-        <div class="panel">
-          <div class="panel-title">
-            <span class="dot dot-white"></span>Zone 1 Info
+      <!-- Zone Phase Windows -->
+      <div class="phase-windows" id="phaseWindows" style="display:none">
+        <!-- Early -->
+        <div class="phase-window" id="winEarly">
+          <div class="pw-header">
+            <span class="pw-dot" style="background:#4af0ff"></span>
+            <span>Zone 2–3 Prediction</span>
+            <span class="pw-conf" id="confEarly">—</span>
           </div>
-          <div class="stats-grid">
-            <div class="stat-box">
-              <div class="stat-val" id="statRadius">—</div>
-              <div class="stat-lbl">Radius (m)</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-val" id="statArea">—</div>
-              <div class="stat-lbl">Area (km²)</div>
-            </div>
-            <div class="stat-box" style="grid-column:span 2">
-              <div class="stat-val" id="statCenter">— , —</div>
-              <div class="stat-lbl">Center (x, y)</div>
-            </div>
+          <canvas class="pw-canvas" id="pwCanvasEarly" width="220" height="120"></canvas>
+        </div>
+        <!-- Mid -->
+        <div class="phase-window" id="winMid">
+          <div class="pw-header">
+            <span class="pw-dot" style="background:#ff8c44"></span>
+            <span>Zone 4–5 Prediction</span>
+            <span class="pw-conf" id="confMid">—</span>
+          </div>
+          <canvas class="pw-canvas" id="pwCanvasMid" width="220" height="120"></canvas>
+        </div>
+        <!-- Final -->
+        <div class="phase-window" id="winFinal">
+          <div class="pw-header">
+            <span class="pw-dot" style="background:#ff4d6a"></span>
+            <span>Final Zone (Zone 8)</span>
+            <span class="pw-conf" id="confFinal">—</span>
+          </div>
+          <canvas class="pw-canvas" id="pwCanvasFinal" width="220" height="120"></canvas>
+        </div>
+      </div>
+
+      <!-- Zone Info -->
+      <div class="panel">
+        <div class="panel-title"><span class="dot dot-yellow"></span>Drawn Zones</div>
+        <div id="drawnZonesList">
+          <div class="empty-state">No zones drawn yet</div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="panel">
+        <div class="panel-title"><span class="dot dot-cyan"></span>Controls</div>
+
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Simulations</span>
+          <div class="iter-btns">
+            <button class="iter-btn" data-val="1000">1K</button>
+            <button class="iter-btn active" data-val="10000">10K</button>
+            <button class="iter-btn" data-val="50000">50K</button>
           </div>
         </div>
 
-        <!-- Controls -->
-        <div class="panel">
-          <div class="panel-title">
-            <span class="dot dot-yellow"></span>Simulation
-          </div>
-          <div class="control-row">
-            <span class="ctrl-label">Iterations</span>
-            <div class="iter-btns">
-              <button class="iter-btn" data-val="1000">1K</button>
-              <button class="iter-btn active" data-val="10000">10K</button>
-              <button class="iter-btn" data-val="50000">50K</button>
-            </div>
-          </div>
-          <div class="control-row">
-            <span class="ctrl-label">Layers</span>
-            <div class="toggles">
-              <label class="tog"><input type="checkbox" id="togHeatmap" checked><span class="tog-track"></span><span>Heatmap</span></label>
-              <label class="tog"><input type="checkbox" id="togPaths" checked><span class="tog-track"></span><span>Paths</span></label>
-              <label class="tog"><input type="checkbox" id="togZones" checked><span class="tog-track"></span><span>Predictions</span></label>
-            </div>
-          </div>
-
-          <button class="btn-primary" id="predictBtn" disabled>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14"/></svg>
-            Predict Zones
-          </button>
-          <button class="btn-secondary" id="resetBtn">↺ Reset</button>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Algorithm</span>
+          <label class="tog">
+            <input type="checkbox" id="togCenterBias" checked>
+            <span class="tog-track"></span>
+            <span>Center-biased (realistic)</span>
+          </label>
         </div>
 
-        <!-- Results -->
-        <div class="panel" id="resultsPanel" style="display:none">
-          <div class="panel-title">
-            <span class="dot dot-green"></span>Predicted Final Zones
-          </div>
-          <div id="resultsList"></div>
-          <div class="heatmap-legend">
-            <span>Low</span>
-            <div class="legend-bar"></div>
-            <span>High</span>
+        <div class="ctrl-row">
+          <span class="ctrl-lbl">Show Layers</span>
+          <div class="toggle-list">
+            <label class="tog"><input type="checkbox" id="togHeatmap" checked><span class="tog-track"></span><span>Heatmap</span></label>
+            <label class="tog"><input type="checkbox" id="togPaths" checked><span class="tog-track"></span><span>Sample Paths</span></label>
+            <label class="tog"><input type="checkbox" id="togZones" checked><span class="tog-track"></span><span>Predictions</span></label>
           </div>
         </div>
 
-        <!-- Loading -->
-        <div class="loading-panel" id="loadingPanel" style="display:none">
-          <div class="spinner"></div>
-          <span id="loadingText">Simulating zones…</span>
-        </div>
+        <button class="btn-primary" id="predictBtn" disabled>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><polygon points="2,1 13,7 2,13"/></svg>
+          Predict All Zones
+        </button>
+        <button class="btn-secondary" id="resetBtn">↺ Clear All &amp; Reset</button>
+      </div>
 
-        <div class="footer-note">
-          Monte Carlo zone physics · <span id="iterCount">10,000</span> simulations
-        </div>
-      </aside>
-    </main>
-  </div>
+      <div class="legend-row">
+        <span>Low Prob.</span>
+        <div class="legend-bar"></div>
+        <span>Highest</span>
+      </div>
 
-  <script type="module" src="src/app.js"></script>
+      <div class="footer-note" id="footerNote">Monte Carlo · 10,000 simulations · Center-biased</div>
+    </aside>
+  </main>
+</div>
+<script type="module" src="src/app.js"></script>
 </body>
 </html>

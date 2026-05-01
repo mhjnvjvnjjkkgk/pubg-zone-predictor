@@ -1,22 +1,26 @@
 # ROADMAP.md
 
-> **Current Phase**: Not Started
-> **Milestone**: v1.0 — Working Zone Predictor
+> **Current Phase**: Phase 5
+> **Milestone**: v2.0 — Maximum Accuracy Zone Predictor
 
 ## Must-Haves
 
-- [ ] Interactive Erangel map with circle drawing tool
-- [ ] Monte Carlo zone simulation engine (zone physics accurate)
-- [ ] Probability heatmap rendered on canvas
-- [ ] Top predicted final zones displayed
-- [ ] Runs entirely in browser — no server needed
+- [x] Interactive Erangel map with circle drawing tool
+- [x] Monte Carlo zone simulation engine (zone physics accurate)
+- [x] Probability heatmap rendered on canvas
+- [x] Top predicted final zones displayed
+- [x] Runs entirely in browser — no server needed
+- [ ] Multi-zone drawing (draw Zone 2, 3 for Bayesian narrowing)
+- [ ] Per-phase prediction windows (Zone 2-3, Zone 4-5, Final)
+- [ ] "Most Accurate Zone" single primary prediction display
+- [ ] Center-biased zone distribution (matches real PUBG behavior)
 
 ---
 
 ## Phases
 
 ### Phase 1: Foundation — Map + Zone Drawing UI
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Interactive Erangel map where user can draw Zone 1 by clicking+dragging. Coordinate system established. Clean, premium UI shell.
 **Deliverables**:
 - `index.html` — app shell
